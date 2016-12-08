@@ -1,0 +1,95 @@
+package com.tangzhixiong.jwatch;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.FileSystems;
+import java.nio.file.StandardWatchEventKinds;
+import java.nio.file.WatchKey;
+import java.nio.file.WatchService;
+import java.util.ArrayDeque;
+
+public class Main {
+    public static WatchService watchService = null;
+    public static Runtime runtime = null;
+    static {
+        try {
+            watchService = FileSystems.getDefault().newWatchService();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        runtime = Runtime.getRuntime();
+    }
+
+    // TODO: java regex to load .jwatchignore
+
+    public static void register(String srcDirPath) {
+        final ArrayDeque<File> queue = new ArrayDeque<>();
+        File srcDirFile = new File(srcDirPath);
+        if (!srcDirFile.exists() || !srcDirFile.isDirectory()) {
+            System.err.format("[%s] is not a valid directory for watching.", srcDirPath);
+            return;
+        }
+        queue.add(srcDirFile);
+        while (!queue.isEmpty()) {
+            File pwd = queue.poll();
+            try {
+                WatchKey key = pwd.toPath().register(watchService,
+                        StandardWatchEventKinds.ENTRY_MODIFY,
+                        StandardWatchEventKinds.ENTRY_CREATE );
+            } catch (IOException e) {
+                e.printStackTrace();
+                continue;
+            }
+            final File[] entries;
+            try {
+                entries = pwd.listFiles();
+            } catch (NullPointerException e) { continue; }
+
+            for (File entry: entries) {
+                if (entry.isDirectory()) {
+                    final String basename = entry.getName();
+                    if (true) {
+                        queue.add(entry);
+                    }
+                }
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        String srcDir = ".";
+        for (int i = 0; i < args.length; ++i) {
+            if (args[i].equals("-d") || args[i].equals("--directory")) {
+                if (++i < args.length) { srcDir = args[i]; }
+            }
+        }
+
+        register(srcDir);
+        System.out.println("[ ] watching...");
+        while (true) {
+            WatchKey key = null;
+            try {
+                key = watchService.take();
+                if (key == null) {
+                    throw new InterruptedException();
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+                continue;
+            }
+            System.out.println("[ ] watching...");
+            if (!key.pollEvents().isEmpty()) {
+                try {
+                    System.out.println("[*] making...");
+                    Process p = new ProcessBuilder().inheritIO().command("make").start();
+                }
+                catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            if (!key.reset()) {
+                break;
+            }
+        }
+    }
+}
