@@ -7,10 +7,12 @@ import java.nio.file.StandardWatchEventKinds;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.util.ArrayDeque;
+import java.util.HashSet;
 
 public class Main {
     public static WatchService watchService = null;
     public static Runtime runtime = null;
+    public static HashSet<String> ignoredDirs = new HashSet<>();
     static {
         try {
             watchService = FileSystems.getDefault().newWatchService();
@@ -29,30 +31,34 @@ public class Main {
             System.err.format("[%s] is not a valid directory for watching.", srcDirPath);
             return;
         }
-        queue.add(srcDirFile);
-        while (!queue.isEmpty()) {
-            File pwd = queue.poll();
-            try {
-                WatchKey key = pwd.toPath().register(watchService,
-                        StandardWatchEventKinds.ENTRY_MODIFY,
-                        StandardWatchEventKinds.ENTRY_CREATE );
-            } catch (IOException e) {
-                e.printStackTrace();
-                continue;
-            }
-            final File[] entries;
-            try {
-                entries = pwd.listFiles();
-            } catch (NullPointerException e) { continue; }
+        try {
+            System.out.println("Watching directories:");
+            queue.add(srcDirFile);
+            while (!queue.isEmpty()) {
+                File pwd = queue.poll();
+                System.out.format("--- %s\n", pwd.getCanonicalPath().replace("\\", "/"));
+                try {
+                    WatchKey key = pwd.toPath().register(watchService, StandardWatchEventKinds.ENTRY_MODIFY);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    continue;
+                }
+                final File[] entries;
+                try {
+                    entries = pwd.listFiles();
+                } catch (NullPointerException e) { continue; }
 
-            for (File entry: entries) {
-                if (entry.isDirectory()) {
-                    final String basename = entry.getName();
-                    if (true) {
-                        queue.add(entry);
+                for (File entry: entries) {
+                    if (entry.isDirectory()) {
+                        final String basename = entry.getName();
+                        if (!basename.startsWith(".") && !ignoredDirs.contains(basename)) {
+                            queue.add(entry);
+                        }
                     }
                 }
             }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
@@ -61,10 +67,17 @@ public class Main {
         for (int i = 0; i < args.length; ++i) {
             if (args[i].equals("-d") || args[i].equals("--directory")) {
                 if (++i < args.length) { srcDir = args[i]; }
+            } else if (args[i].equals("-i") || args[i].equals("--ignore")) {
+                if (++i < args.length) {
+                    for (String dir : args[i].split(";")) {
+                        ignoredDirs.add(dir);
+                    }
+                }
             }
         }
 
         register(srcDir);
+        int counter = 0;
         System.out.println("[ ] watching...");
         while (true) {
             WatchKey key = null;
@@ -77,7 +90,7 @@ public class Main {
                 e.printStackTrace();
                 continue;
             }
-            System.out.println("[ ] watching...");
+            System.out.format("\n\n\n\n[ ] watching... (#%d)\n", ++counter);
             if (!key.pollEvents().isEmpty()) {
                 try {
                     System.out.println("[*] making...");

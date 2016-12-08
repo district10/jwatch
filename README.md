@@ -12,5 +12,5 @@ usage:
 
 ```bash
 $ java -jar jwatcher.jar
-$ java -jar jwatcher.jar -i <INPUTDIR> -I <JWATCH IGNORE FILE>
+$ java -jar jwatcher.jar -d . -i "node_modules;publish;dist"
 ```
